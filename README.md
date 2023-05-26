@@ -1,6 +1,6 @@
 # Azure_stuff
 
-#### deploy_template.json
+### deploy_template.json
 It is a JSON template for the deployment of an instance with resources (VM, Network, Storage) which has the next details:
 - Region
 - VM name
