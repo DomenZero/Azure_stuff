@@ -1,0 +1,220 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "vmName": {
+        "defaultValue": "Set_name_of_a_VM",
+        "type": "String",
+        "metadata": {
+          "description": "Name of the Virtual Machine."
+        }
+      },
+      "vmSize": {
+        "defaultValue": "Standard_B2s",
+        "type": "String",
+        "metadata": {
+          "description": "description"
+        }
+      },
+      "location": {
+        "defaultValue": "westeurope",
+        "type": "String",
+        "metadata": {
+          "description": "Specifies the location for all resources."
+        }
+      },
+      "adminUsername": {
+        "defaultValue": "set_username",
+        "type": "String",
+        "metadata": {
+          "description": "Specifies a username for the Virtual Machine."
+        }
+      },
+      "virtualNetworkId": {
+        "defaultValue": "/subscriptions/set_virtualnetwork_id",
+        "type": "String",
+        "metadata": {
+          "description": "Specifies a Virtual Network"
+        }
+      },
+      "subnetName": {
+        "defaultValue": "Set_someSubnet",
+        "type": "String",
+        "metadata": {
+          "description": "Specifies a Service Subnet"
+        }
+      },
+      "adminPublicKey": {
+        "defaultValue": "ssh-rsa Set_here_code generated-by-azure",
+        "type": "String",
+        "metadata": {
+          "description": "Specifies the SSH rsa public key file as a string. Use \"ssh-keygen -t rsa -b 2048\" to generate your SSH key pairs."
+        }
+      },
+      "storageAccountType": {
+        "defaultValue": "Standard_LRS",
+        "allowedValues": [
+          "Premium_LRS",
+          "Premium_ZRS",
+          "Standard_GRS",
+          "Standard_GZRS",
+          "Standard_LRS",
+          "Standard_RAGRS",
+          "Standard_RAGZRS",
+          "Standard_ZRS"
+        ],
+        "type": "String",
+        "metadata": {
+          "description": "Storage Account type"
+        }
+      },
+      "storageAccountName": {
+        "defaultValue": "[format('store{0}', uniqueString(resourceGroup().id))]",
+        "type": "String",
+        "metadata": {
+          "description": "The name of the storage account"
+        }
+      },
+      "diskSize": {
+        "defaultValue": 32,
+        "allowedValues": [
+          32,
+          64
+        ],
+        "type": "Int",
+        "metadata": {
+          "description": "Disk size"
+        }
+      }
+    },
+    "variables": {
+      "vnetId": "[parameters('virtualNetworkId')]",
+      "vnetName": "[last(split(variables('vnetId'), '/'))]",
+      "subnetRef": "[concat(variables('vnetId'), '/subnets/', parameters('subnetName'))]",
+      "networkInterfaceName": "[concat(parameters('vmName'), '_z1')]"
+    },
+    "resources": [
+      {
+        "type": "Microsoft.Network/networkInterfaces",
+        "apiVersion": "2021-08-01",
+        "name": "[variables('networkInterfaceName')]",
+        "location": "[parameters('location')]",
+        "dependsOn": [],
+        "properties": {
+          "ipConfigurations": [
+            {
+              "name": "ipconfig1",
+              "properties": {
+                "subnet": {
+                  "id": "[variables('subnetRef')]"
+                },
+                "privateIPAllocationMethod": "Dynamic"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "type": "Microsoft.Compute/disks",
+        "apiVersion": "2022-03-02",
+        "name": "[parameters('storageAccountName')]",
+        "location": "[parameters('location')]",
+        "sku": {
+          "name": "[parameters('storageAccountType')]"
+        },
+        "zones": [
+          "1"
+        ],
+        "properties": {
+          "diskSizeGB": "[parameters('diskSize')]",
+          "creationData": {
+            "createOption": "empty"
+          },
+          "encryption": {
+            "diskEncryptionSetId": "/subscriptions/set_subscription_here"
+          }
+        }
+      },
+      {
+        "type": "Microsoft.Compute/virtualMachines",
+        "apiVersion": "2022-03-01",
+        "name": "[parameters('vmName')]",
+        "location": "[parameters('location')]",
+        "dependsOn": [
+          "[resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName'))]"
+        ],
+        "zones": [
+          "1"
+        ],
+        "plan": {
+          "name": "22_04-lts-gen2",
+          "publisher": "canonical",
+          "product": "0001-com-ubuntu-server-jammy"
+        },
+        "properties": {
+          "hardwareProfile": {
+            "vmSize": "[parameters('vmSize')]"
+          },
+          "osProfile": {
+            "computerName": "[parameters('vmName')]",
+            "adminUsername": "[parameters('adminUsername')]",
+            "linuxConfiguration": {
+              "disablePasswordAuthentication": true,
+              "ssh": {
+                "publicKeys": [
+                  {
+                    "path": "[concat('/home/', parameters('adminUsername'), '/.ssh/authorized_keys')]",
+                    "keyData": "[parameters('adminPublicKey')]"
+                  }
+                ]
+              },
+              "provisionVMAgent": true,
+              "patchSettings": {
+                "patchMode": "ImageDefault",
+                "assessmentMode": "ImageDefault"
+              },
+              "enableVMAgentPlatformUpdates": false
+            },
+            "secrets": [],
+            "allowExtensionOperations": true
+          },
+          "storageProfile": {
+            "imageReference": {
+              "publisher": "canonical",
+              "offer": "0001-com-ubuntu-server-jammy",
+              "sku": "22_04-lts-gen2",
+              "version": "latest"
+            },
+            "osDisk": {
+              "createOption": "FromImage",
+              "deleteOption": "Delete"
+            },
+            "dataDisks": [
+              {
+                "lun": 0,
+                "createOption": "attach",
+                "caching": "None",
+                "diskSizeGB": 32,
+                "managedDisk": {
+                  "id": "[resourceId('Microsoft.Compute/disks', parameters('storageAccountName'))]",
+                  "storageAccountType": "[parameters('storageAccountType')]"
+                },
+                "deleteOption": "Delete",
+                "writeAcceleratorEnabled": false
+              }
+            ]
+          },
+          "networkProfile": {
+            "networkInterfaces": [
+              {
+                "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName'))]",
+                "properties": {
+                  "deleteOption": "Delete"
+                }
+              }
+            ]
+          }
+        }
+      }
+    ]
+  }
